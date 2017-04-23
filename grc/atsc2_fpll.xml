@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+###################################################
+## ATSC Receiver PLL
+###################################################
+ -->
+<block>
+  <name>ATSC2 Receiver FPLL</name>
+  <key>atsc2_atsc2_fpll</key>
+  <category>[atsc2]</category>
+  <import>import atsc2</import>
+  <make>atsc2.atsc2_fpll($rate)</make>
+
+  <param>
+    <name>Sample Rate</name>
+    <key>rate</key>
+    <type>float</type>
+  </param>
+
+  <sink>
+    <name>in</name>
+    <type>complex</type>
+  </sink>
+
+  <source>
+    <name>out</name>
+    <type>float</type>
+  </source>
+
+</block>

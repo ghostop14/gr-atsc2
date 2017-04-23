@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<block>
+  <name>TS Streaming Server</name>
+  <key>atsc2_stream_server</key>
+  <category>[atsc2]</category>
+  <import>import atsc2</import>
+  <make>atsc2.tcp_sink($port)</make>
+	<param>
+		<name>Port</name>
+		<key>port</key>
+		<value>0</value>
+		<type>int</type>
+	</param>
+	<check>$port &gt; 0</check>
+	<sink>
+		<name>in</name>
+		<type>byte</type>
+	</sink>
+</block>
