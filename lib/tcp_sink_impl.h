@@ -41,8 +41,10 @@ namespace gr {
         boost::asio::io_service d_io_service;
         boost::asio::ip::tcp::endpoint d_endpoint;
         // std::set<boost::asio::ip::tcp::socket *> tcpsocket;
-        boost::asio::ip::tcp::socket *tcpsocket;
-        boost::asio::ip::tcp::acceptor d_acceptor;
+        boost::asio::ip::tcp::socket *tcpsocket=NULL;
+        boost::asio::ip::tcp::acceptor *d_acceptor=NULL;
+
+        bool bConnected;
 
         boost::mutex d_mutex;
 
@@ -56,6 +58,8 @@ namespace gr {
 
         std::string generateETag();
 
+        void SendInitialHTMLHeader();
+
      public:
       tcp_sink_impl(int port,bool sendDebugContentType=false);
       ~tcp_sink_impl();
@@ -63,6 +67,9 @@ namespace gr {
       bool stop();
 
       void sendBlankPage();
+
+      void accept_handler(boost::asio::ip::tcp::socket * new_connection,
+    	      const boost::system::error_code& error);
 
       // Where all the action really happens
       int work_test(int noutput_items,

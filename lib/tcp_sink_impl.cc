@@ -48,7 +48,7 @@ namespace gr {
       : gr::sync_block("ts_sink",
               gr::io_signature::make(1, 1, sizeof(char)),
               gr::io_signature::make(0, 0, 0)),bSendDebugContentType(sendDebugContentType),
-    d_itemsize(1), d_veclen(1),d_port(port),d_acceptor(d_io_service)
+    d_itemsize(1), d_veclen(1),d_port(port) // ,d_acceptor(d_io_service)
     {
     	d_block_size = 1;
 
@@ -66,57 +66,76 @@ namespace gr {
 
 
     void tcp_sink_impl::connect(bool initialConnection) {
-        std::string s__port = (boost::format("%d") % d_port).str();
-        std::string s__host = "0.0.0.0";
-        boost::asio::ip::tcp::resolver resolver(d_io_service);
-        boost::asio::ip::tcp::resolver::query query(s__host, s__port,
-            boost::asio::ip::resolver_query_base::passive);
-        d_endpoint = *resolver.resolve(query);
-
-        std::cout << "TS streamer waiting for connection on " << s__host << ":" << d_port << std::endl;
+        std::cout << "TCP Source waiting for connection on port " << d_port << std::endl;
         if (initialConnection) {
+        	/*
 			d_acceptor.open(d_endpoint.protocol());
 			d_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
 			d_acceptor.bind(d_endpoint);
+			*/
+	        d_acceptor = new boost::asio::ip::tcp::acceptor(d_io_service,boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(),d_port));
+        }
+        else {
+			d_io_service.reset();
         }
 
-        bool waitForGoodConnection = true;
+        // d_acceptor.listen();
 
-        while (waitForGoodConnection) {
-            d_acceptor.listen();
+        // switched to match boost example code with a copy/temp pointer
+        if (tcpsocket) {
+        	delete tcpsocket;
+        }
+		tcpsocket = NULL; // new boost::asio::ip::tcp::socket(d_io_service);
+        // This will block while waiting for a connection
+        // d_acceptor.accept(*tcpsocket, d_endpoint);
+		bConnected = false;
 
-    		tcpsocket = new boost::asio::ip::tcp::socket(d_io_service);
-            // This will block while waiting for a connection
-            d_acceptor.accept(*tcpsocket, d_endpoint);
 
-        	boost::asio::socket_base::keep_alive option(true);
-        	tcpsocket->set_option(option);
-            std::cout << "Client connected." << std::endl;
+		// Good full example:
+		// http://www.boost.org/doc/libs/1_36_0/doc/html/boost_asio/example/echo/async_tcp_echo_server.cpp
+		// Boost tutorial
+		// http://www.boost.org/doc/libs/1_63_0/doc/html/boost_asio/tutorial.html
 
-            int bytesAvailable=0;
+		boost::asio::ip::tcp::socket *tmpSocket = new boost::asio::ip::tcp::socket(d_io_service);
+		d_acceptor->async_accept(*tmpSocket,
+				boost::bind(&tcp_sink_impl::accept_handler, this, tmpSocket, // This will make a ptr copy // boost::ref(tcpsocket),  // << pass by reference
+				          boost::asio::placeholders::error));
 
-            while (bytesAvailable==0) {
-            	bytesAvailable = netDataAvailable();
-                sleep(1);
-            }
+		if (initialConnection) {
+			d_io_service.run();
+		}
+		else {
+			d_io_service.run();
+		}
 
-            boost::asio::streambuf read_buffer;
-            int bytesRead = boost::asio::read(*tcpsocket, read_buffer,boost::asio::transfer_exactly(bytesAvailable), ec);
-            read_buffer.commit(bytesRead);
+    }
 
-            const char *readData = boost::asio::buffer_cast<const char*>(read_buffer.data());
+    void tcp_sink_impl::SendInitialHTMLHeader() {
+        int bytesAvailable=0;
 
-            std::string requestString = readData;
+        while (bytesAvailable==0) {
+        	bytesAvailable = netDataAvailable();
+            sleep(1);
+        }
 
-            if (requestString.find("GET") == std::string::npos) {
-            	// doesn't look like an HTML request.  Shut down.
-                std::cout << "ERROR: Invalid connection.  Closing session with client." << std::endl;
-                tcpsocket->close();
-                tcpsocket = NULL;
-            }
-            else {
-            	waitForGoodConnection = false;
-            }
+        // We won't be here unless we get data.  The above loop WILL block.
+        boost::asio::streambuf read_buffer;
+        int bytesRead = boost::asio::read(*tcpsocket, read_buffer,boost::asio::transfer_exactly(bytesAvailable), ec);
+        read_buffer.commit(bytesRead);
+
+        const char *readData = boost::asio::buffer_cast<const char*>(read_buffer.data());
+
+        std::string requestString = readData;
+
+        if (requestString.find("GET") == std::string::npos) {
+        	// doesn't look like an HTML request.  Shut down.
+            std::cout << "ERROR: Invalid connection.  Closing session with client." << std::endl;
+            tcpsocket->close();
+            delete tcpsocket;
+            tcpsocket = NULL;
+            connect(false);
+
+            return;
         }
 
         ptime now = second_clock::universal_time();
@@ -161,6 +180,33 @@ namespace gr {
         }
     }
 
+    void tcp_sink_impl::accept_handler(boost::asio::ip::tcp::socket * new_connection,
+  	      const boost::system::error_code& error)
+    {
+      if (!error)
+      {
+          std::cout << "ATSC2 Streaming Server Connection established." << std::endl;
+        // Accept succeeded.
+        tcpsocket = new_connection;
+
+      	boost::asio::socket_base::keep_alive option(true);
+      	tcpsocket->set_option(option);
+      	bConnected = true;
+
+      	SendInitialHTMLHeader();
+      }
+      else {
+    	  std::cout << "ATSC2 streaming server error code " << error << " accepting boost TCP session." << std::endl;
+
+    	  // Boost made a copy so we have to clean up
+    	  delete new_connection;
+
+    	  // safety settings.
+    	  bConnected = false;
+    	  tcpsocket = NULL;
+      }
+    }
+
     std::string tcp_sink_impl::generateETag() {
     	std::string retVal;
 
@@ -200,14 +246,19 @@ namespace gr {
 
     bool tcp_sink_impl::stop() {
         if (tcpsocket) {
-			tcpsocket->close();
+ 			tcpsocket->close();
+ 			delete tcpsocket;
+             tcpsocket = NULL;
+         }
 
-            tcpsocket = NULL;
+         d_io_service.reset();
+         d_io_service.stop();
 
-            d_io_service.reset();
-            d_io_service.stop();
-        }
-        return true;
+         if (d_acceptor) {
+         	delete d_acceptor;
+         	d_acceptor=NULL;
+         }
+         return true;
     }
 
     void tcp_sink_impl::sendBlankPage() {
@@ -278,8 +329,8 @@ namespace gr {
     {
         gr::thread::scoped_lock guard(d_mutex);
 
-        // read was blocking
-        // checkForDisconnect();
+    	if (!bConnected)
+    		return noutput_items;
 
         const char *in = (const char *) input_items[0];
     	unsigned int noi = noutput_items * d_block_size;
@@ -294,6 +345,19 @@ namespace gr {
     	while ((bytesRemaining > 0) && (!ec)) {
             bytesWritten = boost::asio::write(*tcpsocket, boost::asio::buffer((const void *)in, noi),ec);
             bytesRemaining -= bytesWritten;
+
+            if (ec == boost::asio::error::connection_reset || ec == boost::asio::error::broken_pipe) {
+                // see http://stackoverflow.com/questions/3857272/boost-error-codes-reference for boost error codes
+
+
+            	// Connection was reset
+            	bConnected = false;
+            	bytesRemaining = 0;
+
+            	std::cout << "ATSC2 streaming server client disconnected." << std::endl;
+            	connect(false);  // start waiting for another connection
+            }
+
     	}
 
         // writes happen a lot faster then reads.  To the point where it's overflowing the receiving buffer.
