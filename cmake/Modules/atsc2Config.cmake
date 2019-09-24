@@ -22,9 +22,10 @@ FIND_LIBRARY(
           /usr/local/lib64
           /usr/lib
           /usr/lib64
-)
+          )
+
+include("${CMAKE_CURRENT_LIST_DIR}/atsc2Target.cmake")
 
 INCLUDE(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(ATSC2 DEFAULT_MSG ATSC2_LIBRARIES ATSC2_INCLUDE_DIRS)
 MARK_AS_ADVANCED(ATSC2_LIBRARIES ATSC2_INCLUDE_DIRS)
-

@@ -3,7 +3,7 @@
 ##################################################
 # GNU Radio Python Flow Graph
 # Title: Atsc2 Receive
-# Generated: Sun Apr 16 20:58:54 2017
+# Generated: Tue Oct  2 11:43:18 2018
 ##################################################
 
 if __name__ == '__main__':
@@ -18,20 +18,21 @@ if __name__ == '__main__':
 
 from PyQt4 import Qt
 from gnuradio import analog
-from gnuradio import blocks
 from gnuradio import dtv
 from gnuradio import eng_notation
 from gnuradio import filter
 from gnuradio import gr
 from gnuradio import qtgui
+from gnuradio import uhd
 from gnuradio.eng_option import eng_option
 from gnuradio.filter import firdes
 from gnuradio.qtgui import Range, RangeWidget
 from optparse import OptionParser
-import osmosdr
+import atsc2
 import sip
 import sys
 import time
+from gnuradio import qtgui
 
 
 class atsc2_receive(gr.top_block, Qt.QWidget):
@@ -40,6 +41,7 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
         gr.top_block.__init__(self, "Atsc2 Receive")
         Qt.QWidget.__init__(self)
         self.setWindowTitle("Atsc2 Receive")
+        qtgui.util.check_set_qss()
         try:
             self.setWindowIcon(Qt.QIcon.fromTheme('gnuradio-grc'))
         except:
@@ -59,16 +61,19 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
         self.settings = Qt.QSettings("GNU Radio", "atsc2_receive")
         self.restoreGeometry(self.settings.value("geometry").toByteArray())
 
+
         ##################################################
         # Variables
         ##################################################
         self.tuning_offset = tuning_offset = 0
         self.center_freq = center_freq = 195e6
+        self.vga_gain = vga_gain = 18
         self.radio_freq = radio_freq = center_freq+tuning_offset
         self.processing_rate = processing_rate = 6.25e6
         self.lna_gain = lna_gain = 14
-        self.hw_sample_rate = hw_sample_rate = 10e6
+        self.hw_sample_rate = hw_sample_rate = 6.25e6
         self.freq_min = freq_min = -90
+        self.amp = amp = 0
 
         ##################################################
         # Blocks
@@ -86,12 +91,17 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
         self._center_freq_line_edit.returnPressed.connect(
         	lambda: self.set_center_freq(eng_notation.str_to_num(str(self._center_freq_line_edit.text().toAscii()))))
         self.top_grid_layout.addWidget(self._center_freq_tool_bar, 0,2,1,1)
-        self.rational_resampler_xxx_0 = filter.rational_resampler_ccc(
-                interpolation=625,
-                decimation=1000,
-                taps=None,
-                fractional_bw=None,
+        self.u = uhd.usrp_source(
+        	",".join(("", "")),
+        	uhd.stream_args(
+        		cpu_format="fc32",
+        		channels=range(1),
+        	),
         )
+        self.u.set_samp_rate(hw_sample_rate)
+        self.u.set_center_freq(center_freq, 0)
+        self.u.set_gain(lna_gain, 0)
+        self.u.set_antenna('RX2', 0)
         self.qtgui_freq_sink_x_0_0 = qtgui.freq_sink_c(
         	1024, #size
         	firdes.WIN_BLACKMAN_hARRIS, #wintype
@@ -109,13 +119,13 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
         self.qtgui_freq_sink_x_0_0.set_fft_average(1.0)
         self.qtgui_freq_sink_x_0_0.enable_axis_labels(True)
         self.qtgui_freq_sink_x_0_0.enable_control_panel(False)
-        
+
         if not True:
           self.qtgui_freq_sink_x_0_0.disable_legend()
-        
+
         if "complex" == "float" or "complex" == "msg_float":
           self.qtgui_freq_sink_x_0_0.set_plot_pos_half(not True)
-        
+
         labels = ['', '', '', '', '',
                   '', '', '', '', '']
         widths = [1, 1, 1, 1, 1,
@@ -132,22 +142,9 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
             self.qtgui_freq_sink_x_0_0.set_line_width(i, widths[i])
             self.qtgui_freq_sink_x_0_0.set_line_color(i, colors[i])
             self.qtgui_freq_sink_x_0_0.set_line_alpha(i, alphas[i])
-        
+
         self._qtgui_freq_sink_x_0_0_win = sip.wrapinstance(self.qtgui_freq_sink_x_0_0.pyqwidget(), Qt.QWidget)
         self.top_grid_layout.addWidget(self._qtgui_freq_sink_x_0_0_win, 1,0,2,5)
-        self.osmosdr_source_0 = osmosdr.source( args="numchan=" + str(1) + " " + 'airspy' )
-        self.osmosdr_source_0.set_sample_rate(hw_sample_rate)
-        self.osmosdr_source_0.set_center_freq(radio_freq, 0)
-        self.osmosdr_source_0.set_freq_corr(0, 0)
-        self.osmosdr_source_0.set_dc_offset_mode(0, 0)
-        self.osmosdr_source_0.set_iq_balance_mode(0, 0)
-        self.osmosdr_source_0.set_gain_mode(False, 0)
-        self.osmosdr_source_0.set_gain(lna_gain, 0)
-        self.osmosdr_source_0.set_if_gain(lna_gain, 0)
-        self.osmosdr_source_0.set_bb_gain(20, 0)
-        self.osmosdr_source_0.set_antenna('', 0)
-        self.osmosdr_source_0.set_bandwidth(0, 0)
-          
         self.dtv_atsc_viterbi_decoder_0 = dtv.atsc_viterbi_decoder()
         self.dtv_atsc_sync_0 = dtv.atsc_sync(11.8385e6)
         self.dtv_atsc_rx_filter_0 = dtv.atsc_rx_filter(processing_rate,1.1)
@@ -159,32 +156,29 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
         self.dtv_atsc_depad_0 = dtv.atsc_depad()
         self.dtv_atsc_deinterleaver_0 = dtv.atsc_deinterleaver()
         self.dc_blocker_xx_0 = filter.dc_blocker_ff(4096, True)
-        self.blocks_probe_rate_0 = blocks.probe_rate(gr.sizeof_char*1, 500.0, 0.15)
-        self.blocks_null_sink_0 = blocks.null_sink(gr.sizeof_char*1)
-        self.blocks_message_debug_0 = blocks.message_debug()
+        self.atsc2_stream_server_0 = atsc2.tcp_sink(8080)
         self.analog_agc_xx_0 = analog.agc_ff(1e-5, 4.0, 1.0)
         self.analog_agc_xx_0.set_max_gain(65536)
+
+
 
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.blocks_probe_rate_0, 'rate'), (self.blocks_message_debug_0, 'print'))    
-        self.connect((self.analog_agc_xx_0, 0), (self.dtv_atsc_sync_0, 0))    
-        self.connect((self.dc_blocker_xx_0, 0), (self.analog_agc_xx_0, 0))    
-        self.connect((self.dtv_atsc_deinterleaver_0, 0), (self.dtv_atsc_rs_decoder_0, 0))    
-        self.connect((self.dtv_atsc_depad_0, 0), (self.blocks_null_sink_0, 0))    
-        self.connect((self.dtv_atsc_depad_0, 0), (self.blocks_probe_rate_0, 0))    
-        self.connect((self.dtv_atsc_derandomizer_0, 0), (self.dtv_atsc_depad_0, 0))    
-        self.connect((self.dtv_atsc_equalizer_0, 0), (self.dtv_atsc_viterbi_decoder_0, 0))    
-        self.connect((self.dtv_atsc_fpll_0, 0), (self.dc_blocker_xx_0, 0))    
-        self.connect((self.dtv_atsc_fs_checker_0, 0), (self.dtv_atsc_equalizer_0, 0))    
-        self.connect((self.dtv_atsc_rs_decoder_0, 0), (self.dtv_atsc_derandomizer_0, 0))    
-        self.connect((self.dtv_atsc_rx_filter_0, 0), (self.dtv_atsc_fpll_0, 0))    
-        self.connect((self.dtv_atsc_sync_0, 0), (self.dtv_atsc_fs_checker_0, 0))    
-        self.connect((self.dtv_atsc_viterbi_decoder_0, 0), (self.dtv_atsc_deinterleaver_0, 0))    
-        self.connect((self.osmosdr_source_0, 0), (self.rational_resampler_xxx_0, 0))    
-        self.connect((self.rational_resampler_xxx_0, 0), (self.dtv_atsc_rx_filter_0, 0))    
-        self.connect((self.rational_resampler_xxx_0, 0), (self.qtgui_freq_sink_x_0_0, 0))    
+        self.connect((self.analog_agc_xx_0, 0), (self.dtv_atsc_sync_0, 0))
+        self.connect((self.dc_blocker_xx_0, 0), (self.analog_agc_xx_0, 0))
+        self.connect((self.dtv_atsc_deinterleaver_0, 0), (self.dtv_atsc_rs_decoder_0, 0))
+        self.connect((self.dtv_atsc_depad_0, 0), (self.atsc2_stream_server_0, 0))
+        self.connect((self.dtv_atsc_derandomizer_0, 0), (self.dtv_atsc_depad_0, 0))
+        self.connect((self.dtv_atsc_equalizer_0, 0), (self.dtv_atsc_viterbi_decoder_0, 0))
+        self.connect((self.dtv_atsc_fpll_0, 0), (self.dc_blocker_xx_0, 0))
+        self.connect((self.dtv_atsc_fs_checker_0, 0), (self.dtv_atsc_equalizer_0, 0))
+        self.connect((self.dtv_atsc_rs_decoder_0, 0), (self.dtv_atsc_derandomizer_0, 0))
+        self.connect((self.dtv_atsc_rx_filter_0, 0), (self.dtv_atsc_fpll_0, 0))
+        self.connect((self.dtv_atsc_sync_0, 0), (self.dtv_atsc_fs_checker_0, 0))
+        self.connect((self.dtv_atsc_viterbi_decoder_0, 0), (self.dtv_atsc_deinterleaver_0, 0))
+        self.connect((self.u, 0), (self.dtv_atsc_rx_filter_0, 0))
+        self.connect((self.u, 0), (self.qtgui_freq_sink_x_0_0, 0))
 
     def closeEvent(self, event):
         self.settings = Qt.QSettings("GNU Radio", "atsc2_receive")
@@ -203,16 +197,22 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
 
     def set_center_freq(self, center_freq):
         self.center_freq = center_freq
-        self.set_radio_freq(self.center_freq+self.tuning_offset)
         Qt.QMetaObject.invokeMethod(self._center_freq_line_edit, "setText", Qt.Q_ARG("QString", eng_notation.num_to_str(self.center_freq)))
+        self.u.set_center_freq(self.center_freq, 0)
+        self.set_radio_freq(self.center_freq+self.tuning_offset)
         self.qtgui_freq_sink_x_0_0.set_frequency_range(self.center_freq, self.hw_sample_rate)
+
+    def get_vga_gain(self):
+        return self.vga_gain
+
+    def set_vga_gain(self, vga_gain):
+        self.vga_gain = vga_gain
 
     def get_radio_freq(self):
         return self.radio_freq
 
     def set_radio_freq(self, radio_freq):
         self.radio_freq = radio_freq
-        self.osmosdr_source_0.set_center_freq(self.radio_freq, 0)
 
     def get_processing_rate(self):
         return self.processing_rate
@@ -225,16 +225,16 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
 
     def set_lna_gain(self, lna_gain):
         self.lna_gain = lna_gain
-        self.osmosdr_source_0.set_gain(self.lna_gain, 0)
-        self.osmosdr_source_0.set_if_gain(self.lna_gain, 0)
+        self.u.set_gain(self.lna_gain, 0)
+
 
     def get_hw_sample_rate(self):
         return self.hw_sample_rate
 
     def set_hw_sample_rate(self, hw_sample_rate):
         self.hw_sample_rate = hw_sample_rate
+        self.u.set_samp_rate(self.hw_sample_rate)
         self.qtgui_freq_sink_x_0_0.set_frequency_range(self.center_freq, self.hw_sample_rate)
-        self.osmosdr_source_0.set_sample_rate(self.hw_sample_rate)
 
     def get_freq_min(self):
         return self.freq_min
@@ -242,6 +242,12 @@ class atsc2_receive(gr.top_block, Qt.QWidget):
     def set_freq_min(self, freq_min):
         self.freq_min = freq_min
         self.qtgui_freq_sink_x_0_0.set_y_axis(self.freq_min, -10)
+
+    def get_amp(self):
+        return self.amp
+
+    def set_amp(self, amp):
+        self.amp = amp
 
 
 def main(top_block_cls=atsc2_receive, options=None):

@@ -18,8 +18,8 @@
 # Boston, MA 02110-1301, USA.
 
 install(FILES
-#    atsc2_atsc2_rx_filter.xml 
-#    atsc2_fpll.xml
-    atsc2_stream_server.xml
+#    atsc2_atsc2_rx_filter.block.yml 
+#    atsc2_fpll.block.yml
+    atsc2_stream_server.block.yml
     DESTINATION share/gnuradio/grc/blocks
 )
