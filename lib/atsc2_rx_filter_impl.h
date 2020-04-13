@@ -49,8 +49,8 @@ namespace gr {
         double interp;
         std::vector<float> rrc_taps;
 
-        // boost::shared_ptr<gr::basic_block> *pfb;
-        boost::shared_ptr<gr::filter::pfb_arb_resampler_ccf_impl> pfb;
+        // std::shared_ptr<gr::basic_block> *pfb;
+        std::shared_ptr<gr::filter::pfb_arb_resampler_ccf_impl> pfb;
 
      public:
       bool stop();
