@@ -36,7 +36,7 @@ namespace gr {
     class ATSC2_API atsc2_rx_filter : virtual public gr::hier_block2
     {
      public:
-      typedef std::shared_ptr<atsc2_rx_filter> sptr;
+      typedef boost::shared_ptr<atsc2_rx_filter> sptr;
 
       /*!
        * \brief Return a shared_ptr to a new instance of atsc2::atsc2_rx_filter.

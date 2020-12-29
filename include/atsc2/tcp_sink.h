@@ -36,7 +36,7 @@ namespace gr {
     class ATSC2_API tcp_sink : virtual public gr::sync_block
     {
      public:
-      typedef std::shared_ptr<tcp_sink> sptr;
+      typedef boost::shared_ptr<tcp_sink> sptr;
 
       /*!
        * \brief Return a shared_ptr to a new instance of grnet::tcp_sink.
